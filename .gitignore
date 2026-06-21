@@ -1,0 +1,15 @@
+# generation staging (intermediate AI output — final content lives in data/)
+.gen/
+# node (only used locally for tests)
+node_modules/
+package.json
+package-lock.json
+# test artifacts
+test/shot-*.png
+# os
+.DS_Store
+Thumbs.db
+# editors
+.vscode/
+.idea/
+*.log

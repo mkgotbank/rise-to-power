@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0e1015" />
+  <meta name="description" content="Rise to Power — a free, open-source life simulator. Live thousands of lives, build dynasties, and rise from nobody to ruler of nations." />
+  <title>Rise to Power — Life Simulator</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="apple-touch-icon" href="assets/favicon.svg" />
+  <link rel="manifest" href="site.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app" id="app">
+    <!-- screens & UI are injected by ui.js -->
+  </div>
+
+  <!-- ENGINE CORE -->
+  <script src="js/rng.js"></script>
+
+  <!-- DATA (pure content — load before engine logic uses it) -->
+  <script src="data/countries.js"></script>
+  <script src="data/names.js"></script>
+  <script src="data/careers.js"></script>
+  <script src="data/activities.js"></script>
+  <script src="data/events.js"></script>
+  <script src="data/crimes.js"></script>
+  <script src="data/health.js"></script>
+  <script src="data/assets.js"></script>
+  <script src="data/orgs.js"></script>
+  <script src="data/missions.js"></script>
+  <script src="data/world.js"></script>
+
+  <!-- SYSTEMS + ENGINE -->
+  <script src="js/engine.js"></script>
+  <script src="js/systems.js"></script>
+  <script src="js/statecraft.js"></script>
+
+  <!-- UI -->
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
