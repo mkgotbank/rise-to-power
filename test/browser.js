@@ -64,6 +64,37 @@ const URL = 'http://localhost:8731/';
     const actBtn = await page.$('#overlay [data-act]');
     if (actBtn) { await actBtn.click(); log('  did an activity OK'); }
     await page.evaluate(() => { const o = document.getElementById('overlay'); if (o) o.remove(); });
+
+    // NEW: menu -> God Mode (move a slider)
+    await page.click('#menuBtn');
+    await page.waitForSelector('#overlay [data-m="god"]');
+    await page.click('#overlay [data-m="god"]');
+    await page.waitForSelector('.god-range');
+    await page.$eval('.god-range[data-stat="smarts"]', (el) => { el.value = 95; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    const smarts = await page.$eval('#gv_smarts', (e) => e.textContent);
+    log('  God Mode slider set smarts -> ' + smarts);
+    await page.click('#overlay [data-g="m1"]');
+    log('  God Mode +$1M OK');
+    await page.evaluate(() => { const o = document.getElementById('overlay'); if (o) o.remove(); });
+
+    // NEW: Love -> Meet Someone
+    await page.click('.cat[data-cat="love"]');
+    await page.waitForSelector('#overlay [data-a="meet"]');
+    await page.click('#overlay [data-a="meet"]');
+    log('  Met someone new OK');
+    await page.evaluate(() => { const o = document.getElementById('overlay'); if (o) o.remove(); });
+
+    // NEW: Time travel
+    await page.click('#menuBtn');
+    await page.waitForSelector('#overlay [data-m="time"]');
+    await page.click('#overlay [data-m="time"]');
+    const ttBtn = await page.$('#overlay [data-tt]');
+    if (ttBtn) {
+      const ageBefore = await page.textContent('#subline');
+      await ttBtn.click();
+      await page.waitForSelector('#ageBtn');
+      log('  Time travel OK ("' + ageBefore.trim() + '" -> "' + (await page.textContent('#subline')).trim() + '")');
+    }
   }
 
   // 5. localStorage save check

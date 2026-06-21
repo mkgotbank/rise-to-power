@@ -21,6 +21,7 @@
   function blankChar() {
     return {
       first: '', last: '', sex: 'male', age: 0, alive: true, causeOfDeath: null,
+      orientation: 'straight', attractedTo: ['female'],
       country: 'United States', city: '', currency: '$', flag: '🌎',
       birthYear: 2026,
       stats: { health: 80, happiness: 70, smarts: 50, looks: 50, karma: 0 },
@@ -47,6 +48,7 @@
     opts = opts || {};
     const seed = opts.seed != null ? String(opts.seed) : String(Math.floor((performance.now() % 1) * 1e9) + Date.now() % 1e9);
     RTP.rng = new RTP.RNG(seed);
+    resetHistory();
     return {
       version: 1,
       seed,
@@ -97,6 +99,9 @@
     ch.flag = country.flag || '🌎';
     ch.city = country.cities ? rng.pick(country.cities) : '';
     ch.sex = opts.sex || (rng.chance(0.5) ? 'male' : 'female');
+    // sexual orientation — drives who shows up when dating
+    ch.orientation = opts.orientation || rng.weighted([{ o: 'straight', w: 80 }, { o: 'gay', w: 10 }, { o: 'bisexual', w: 10 }]).o;
+    setAttraction(ch);
     const generated = nameFor(rng, ch.sex, ch.country);
     ch.first = opts.first || generated.first;
     ch.last = opts.last || generated.last;
@@ -334,6 +339,7 @@
   function ageUp(state) {
     const ch = state.char;
     if (!ch.alive) return { dead: true };
+    snapshot(state); // capture pre-age state so the player can rewind
     ch.age += 1;
     const yearLog = [];
 
@@ -357,6 +363,21 @@
     if (ch.job && !ch.criminal.inPrison) {
       addMoney(state, Math.round(ch.job.salary * 0.78)); // post-tax-ish take-home
       ch.job.years = (ch.job.years || 0) + 1;
+    }
+
+    // ---- politics: approval actually moves while you hold office ----
+    if (ch.power.politics.inOffice) {
+      const pol = ch.power.politics;
+      let d = RTP.rng.normal(-1.5, 4); // incumbency erosion + noise
+      if (ch.stats.happiness > 70) d += 1;
+      if ((ch.power.fame.scandal || 0) > 0) d -= ch.power.fame.scandal;
+      if (state.world && RTP.worldUtil) { const me = RTP.worldUtil.playerNationObj(state); if (me) d += (me.stability - 50) / 20; }
+      pol.approval = clamp(pol.approval + d, 0, 100);
+      if (pol.approval <= 8 && RTP.rng.chance(0.5)) {
+        yearLog.push({ text: `Your approval collapsed — you were forced out of office as ${pol.office}.`, type: 'war' });
+        pol.inOffice = false;
+        if (ch.job && ch.job.category === 'Politics') { ch.job = null; ch.salary = 0; }
+      }
     }
 
     // ---- relationships age & drift ----
@@ -573,6 +594,7 @@
 
     state.dynasty.generation += 1;
     state.char = ch;
+    resetHistory(); // a new generation starts its own timeline
     log(state, `— Generation ${state.dynasty.generation} —`, 'legacy');
     log(state, `${ch.first} ${ch.last} inherits ${ch.currency}${fmt(inheritance)} and the family legacy.`, 'legacy');
     emit('newlife', state);
@@ -597,6 +619,13 @@
     state.char.log.push({ age: state.char.age, text, type: type || 'event' });
   }
   function genderWord(sex, m, f) { return sex === 'female' ? f : m; }
+  function setAttraction(ch) {
+    const opp = ch.sex === 'female' ? 'male' : 'female';
+    if (ch.orientation === 'bisexual') ch.attractedTo = ['male', 'female'];
+    else if (ch.orientation === 'gay') ch.attractedTo = [ch.sex];
+    else { ch.orientation = ch.orientation || 'straight'; ch.attractedTo = [opp]; }
+    return ch.attractedTo;
+  }
   function labelRel(r) {
     const map = { father: 'father', mother: 'mother', sibling: 'sibling', partner: 'partner', spouse: 'spouse', fiance: 'fiancé', child: 'child', friend: 'friend', pet: 'pet', coworker: 'coworker' };
     return map[r.type] || r.type;
@@ -613,6 +642,13 @@
   //  SAVE / LOAD  (localStorage)
   // =====================================================================
   const SAVE_KEY = 'riseToPower.save.v1';
+  const HIST_KEY = 'riseToPower.history.v1';
+  const MAX_HISTORY = 30;
+  let history = []; // in-memory snapshots for time travel
+
+  function clone(o) {
+    try { return structuredClone(o); } catch (e) { return JSON.parse(JSON.stringify(o)); }
+  }
   function save(state) {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
   }
@@ -622,11 +658,51 @@
       if (!raw) return null;
       const st = JSON.parse(raw);
       RTP.rng = new RTP.RNG(st.seed);
+      try { const h = localStorage.getItem(HIST_KEY); history = h ? JSON.parse(h) : []; } catch (e) { history = []; }
       return st;
     } catch (e) { return null; }
   }
   function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
-  function wipe() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+  function wipe() { try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(HIST_KEY); } catch (e) {} history = []; }
+
+  // ---- time travel ----
+  function snapshot(state) {
+    history.push(clone(state));
+    if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(history)); } catch (e) { /* quota: keep in memory */ }
+  }
+  function resetHistory() { history = []; try { localStorage.removeItem(HIST_KEY); } catch (e) {} }
+  function timeline() {
+    return history.map((s, i) => ({ idx: i, age: s.char.age, name: s.char.first + ' ' + s.char.last, gen: s.dynasty.generation, alive: s.char.alive }));
+  }
+  function canTimeTravel() { return history.length > 0; }
+  // restore to snapshot idx; discard everything after it
+  function timeTravel(idx) {
+    if (idx < 0 || idx >= history.length) return null;
+    const restored = clone(history[idx]);
+    history = history.slice(0, idx); // can't redo forward
+    RTP.rng = new RTP.RNG(restored.seed + ':tt' + restored.char.age);
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(history)); } catch (e) {}
+    save(restored);
+    emit('newlife', restored);
+    emit('state', restored);
+    return restored;
+  }
+
+  // ---- god mode ----
+  function godSet(state, patch) {
+    const ch = state.char;
+    if (patch.stats) for (const k in patch.stats) if (STAT_KEYS.includes(k)) ch.stats[k] = clamp(Math.round(patch.stats[k]), k === 'karma' ? -100 : 0, 100);
+    if (patch.money != null) ch.money = Math.round(patch.money);
+    if (patch.addMoney != null) addMoney(state, patch.addMoney);
+    if (patch.orientation) { ch.orientation = patch.orientation; setAttraction(ch); }
+    if (patch.first) ch.first = patch.first;
+    if (patch.last) ch.last = patch.last;
+    if (patch.healAll) { ch.conditions = []; ch.stats.health = 100; }
+    if (patch.clearRecord) { ch.criminal.record = []; ch.criminal.inPrison = false; ch.criminal.sentence = 0; ch.criminal.notoriety = 0; }
+    if (patch.revive && !ch.alive) { ch.alive = true; ch.causeOfDeath = null; ch.stats.health = Math.max(ch.stats.health, 60); }
+    emit('state', state); save(state);
+  }
 
   // =====================================================================
   //  PUBLIC API
@@ -638,8 +714,9 @@
     addRelationship, changeRel, relsOfType, partner, children,
     addMoney, addAsset, netWorth, addCondition, sentence, addFame, addTrait,
     die, canContinueLegacy, continueAsHeir, bestTitle,
-    log, resolveText, fmt, labelRel, genderWord,
+    log, resolveText, fmt, labelRel, genderWord, setAttraction,
     save, load, hasSave, wipe,
+    snapshot, timeline, canTimeTravel, timeTravel, resetHistory, godSet,
     on: (fn) => listeners.push(fn), emit
   };
 })();

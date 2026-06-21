@@ -203,12 +203,52 @@
     findDate(state) {
       const ch = state.char;
       if (ch.age < 14) return { ok: false, text: 'You are too young to date.' };
-      if (E().partner(ch)) return { ok: false, text: 'You are already in a relationship.' };
-      const sx = rng().chance(0.5) ? 'male' : 'female';
+      if (E().partner(ch)) return { ok: false, text: 'You are already in a relationship. Break up first.' };
+      const prefs = (ch.attractedTo && ch.attractedTo.length) ? ch.attractedTo : ['male', 'female'];
+      const sx = rng().pick(prefs);
       const nm = (data().names && (data().names[ch.country] || data().names.default)) || { male: ['Alex'], female: ['Sam'], last: ['Lee'] };
       const first = rng().pick(sx === 'female' ? nm.female : nm.male);
       const cand = { id: '_cand', name: first + ' ' + rng().pick(nm.last), sex: sx, age: clamp(ch.age + rng().int(-4, 4), 16, 90), looks: rng().int(20, 95), rel: rng().int(20, 60) };
       return { ok: true, candidate: cand, text: `You met ${cand.name} (${cand.age}).` };
+    },
+    meetPerson(state) {
+      const ch = state.char;
+      const sx = rng().chance(0.5) ? 'male' : 'female';
+      const nm = (data().names && (data().names[ch.country] || data().names.default)) || { male: ['Alex'], female: ['Sam'], last: ['Lee'] };
+      const first = rng().pick(sx === 'female' ? nm.female : nm.male);
+      const friend = E().addRelationship(ch, { type: 'friend', name: first + ' ' + rng().pick(nm.last), sex: sx, age: clamp(ch.age + rng().int(-6, 6), 1, 95), rel: rng().int(30, 65), met: ch.age });
+      E().applyEffect(state, { happiness: 3 });
+      return { ok: true, text: `You met ${friend.name} and made a new friend.`, friend };
+    },
+    breakUp(state, relId) {
+      const ch = state.char;
+      const r = (relId && ch.relationships.find((x) => x.id === relId)) || E().partner(ch);
+      if (!r || !['partner', 'spouse', 'fiance'].includes(r.type)) return { ok: false, text: 'You have no partner to break up with.' };
+      if (r.type === 'spouse') {
+        const split = Math.round(Math.max(0, ch.money) * 0.4);
+        E().addMoney(state, -split);
+        r.type = 'ex'; r.rel = clamp(r.rel - 40, 0, 100);
+        E().applyEffect(state, { happiness: -12 });
+        return { ok: true, text: `You divorced ${r.name}. The settlement cost you ${ch.currency}${fmt(split)}.` };
+      }
+      r.type = 'ex'; r.rel = clamp(r.rel - 25, 0, 100);
+      E().applyEffect(state, { happiness: -6 });
+      return { ok: true, text: `You broke up with ${r.name}.` };
+    },
+    cheat(state) {
+      const ch = state.char;
+      const p = E().partner(ch);
+      if (!p) return { ok: false, text: 'You have no partner to cheat on.' };
+      const caught = rng().chance(Math.max(0.12, 0.5 - ch.stats.smarts / 400));
+      if (caught) {
+        E().changeRel(ch, p, -rng().int(30, 60));
+        E().applyEffect(state, { happiness: -10, karma: -8 });
+        if (rng().chance(0.5)) { p.type = 'ex'; return { ok: true, caught: true, text: `You cheated on ${p.name} — and got caught. They left you.` }; }
+        return { ok: true, caught: true, text: `You cheated on ${p.name} and got caught. The relationship is badly damaged.` };
+      }
+      ch.flags.cheater = (ch.flags.cheater || 0) + 1;
+      E().applyEffect(state, { happiness: 4, karma: -6 });
+      return { ok: true, caught: false, text: `You cheated on ${p.name}. Nobody found out... this time.` };
     },
     askOut(state, cand) {
       const ch = state.char;
@@ -409,6 +449,33 @@
       }
       E().applyEffect(state, { happiness: -8 });
       return { ok: true, won: false, text: `You lost the race for ${office.name}.` };
+    },
+    politicalAction(state, kind) {
+      const ch = state.char, pol = ch.power.politics;
+      if (!pol.inOffice) return { ok: false, text: 'You must hold office to do that.' };
+      if (kind === 'speech') {
+        const d = rng().int(-3, 10); pol.approval = clamp(pol.approval + d, 0, 100);
+        return { ok: true, text: d >= 0 ? `Your speech inspired the public. Approval +${d} (now ${pol.approval}%).` : `Your speech fell flat. Approval ${d} (now ${pol.approval}%).` };
+      }
+      if (kind === 'bill') {
+        const d = rng().int(2, 12); pol.approval = clamp(pol.approval + d, 0, 100);
+        if (state.world && RTP.worldUtil) { const me = RTP.worldUtil.playerNationObj(state); if (me) me.treasury = Math.max(0, me.treasury - me.gdp * 0.005); }
+        E().applyEffect(state, { karma: 2 });
+        return { ok: true, text: `You passed popular legislation. Approval +${d} (now ${pol.approval}%).` };
+      }
+      if (kind === 'rally') {
+        const cost = rng().int(1000, 20000);
+        if (ch.money < cost) return { ok: false, text: `A rally costs ${ch.currency}${fmt(cost)}.` };
+        E().addMoney(state, -cost);
+        const d = rng().int(-2, 14); pol.approval = clamp(pol.approval + d, 0, 100);
+        return { ok: true, text: `You held a rally (${ch.currency}${fmt(cost)}). Approval ${d >= 0 ? '+' : ''}${d} (now ${pol.approval}%).` };
+      }
+      if (kind === 'scandal') {
+        if (rng().chance(0.5)) { ch.power.fame.scandal = Math.max(0, (ch.power.fame.scandal || 0) - 1); return { ok: true, text: 'You buried the scandal. Crisis averted.' }; }
+        pol.approval = clamp(pol.approval - rng().int(5, 15), 0, 100);
+        return { ok: true, text: `The scandal blew up in your face. Approval now ${pol.approval}%.` };
+      }
+      return { ok: false, text: 'Unknown action.' };
     },
     goViral(state) {
       const ch = state.char;

@@ -49,11 +49,12 @@
       <input class="field" id="cFirst" placeholder="First name (optional)" />
       <input class="field" id="cLast" placeholder="Last name (optional)" />
       <select class="field" id="cSex"><option value="">Random sex</option><option value="male">Male</option><option value="female">Female</option></select>
+      <select class="field" id="cOrient"><option value="">Random orientation</option><option value="straight">Straight</option><option value="gay">Gay</option><option value="bisexual">Bisexual</option></select>
       <select class="field" id="cCountry"><option value="">Random country</option>${countries.map((c) => `<option>${esc(c)}</option>`).join('')}</select>
       <div class="btn-row"><button class="btn" id="cStart">Begin Life</button><button class="btn ghost" id="cCancel">Cancel</button></div>
     `);
     $('#cStart').onclick = () => {
-      const opts = { first: $('#cFirst').value.trim() || null, last: $('#cLast').value.trim() || null, sex: $('#cSex').value || null, country: $('#cCountry').value || null };
+      const opts = { first: $('#cFirst').value.trim() || null, last: $('#cLast').value.trim() || null, sex: $('#cSex').value || null, orientation: $('#cOrient').value || null, country: $('#cCountry').value || null };
       closeSheet(); startNewLife(opts);
     };
     $('#cCancel').onclick = closeSheet;
@@ -83,6 +84,7 @@
           <div class="sub" id="subline"></div>
         </div>
         <div class="networth"><div class="nv" id="nw"></div><div class="nl">Net Worth</div></div>
+        <button class="icon-btn" id="menuBtn" aria-label="Menu">☰</button>
       </div>
       <div class="stats" id="stats"></div>
       <div class="log" id="log"></div>
@@ -95,9 +97,88 @@
         </div>
       </div>`;
     $('#ageBtn').onclick = onAgeUp;
+    $('#menuBtn').onclick = openMenu;
     app().querySelectorAll('.cat').forEach((b) => (b.onclick = () => openCategory(b.dataset.cat)));
     renderStats();
     renderLog(true);
+  }
+
+  // ---------------------------------------------------------------------
+  //  MENU: God Mode · Time Travel · Settings
+  // ---------------------------------------------------------------------
+  function openMenu() {
+    openSheet(`
+      <h2>☰ Menu</h2>
+      <div class="lead">Your life is auto-saved to this browser after every action.</div>
+      <div class="section-title">Tools</div>
+      <button class="choice" data-m="god"><span>⚡ God Mode</span><span class="meta">edit your life</span></button>
+      <button class="choice" data-m="time"><span>⏪ Go Back in Time</span><span class="meta">${E().canTimeTravel() ? E().timeline().length + ' points' : 'no history yet'}</span></button>
+      <button class="choice" data-m="orient"><span>🌈 Sexual Orientation</span><span class="meta">${esc(state.char.orientation)}</span></button>
+      <div class="section-title">Game</div>
+      <button class="choice" data-m="newlife"><span>🍼 Start a New Life</span><span class="meta">ends this one</span></button>
+    `);
+    const acts = { god: godSheet, time: timeTravelSheet, orient: orientationSheet, newlife: confirmNewLife };
+    app().querySelectorAll('[data-m]').forEach((b) => (b.onclick = () => acts[b.dataset.m]()));
+  }
+
+  function godSheet() {
+    const ch = state.char;
+    const slider = (k, label) => `<div class="stat" style="margin-bottom:10px"><div class="lab"><span>${label}</span><b id="gv_${k}">${ch.stats[k]}</b></div><input class="god-range" type="range" min="${k === 'karma' ? -100 : 0}" max="100" value="${ch.stats[k]}" data-stat="${k}"></div>`;
+    openSheet(`
+      <h2>⚡ God Mode</h2>
+      <div class="lead">Bend reality. Changes apply instantly and save.</div>
+      ${slider('health', 'Health')}${slider('happiness', 'Happiness')}${slider('smarts', 'Smarts')}${slider('looks', 'Looks')}${slider('karma', 'Karma')}
+      <div class="section-title">Money</div>
+      <input class="field" id="gMoney" type="number" value="${Math.round(ch.money)}" />
+      <div class="btn-row"><button class="btn" data-g="setMoney">Set Cash</button><button class="btn" data-g="m1">+$1M</button><button class="btn" data-g="m10">+$10M</button></div>
+      <div class="section-title">Quick Cheats</div>
+      <div class="btn-row">
+        <button class="btn" data-g="heal">Heal Everything</button>
+        <button class="btn" data-g="clear">Clear Criminal Record</button>
+        ${!ch.alive ? '<button class="btn danger" data-g="revive">Revive</button>' : ''}
+      </div>
+    `);
+    app().querySelectorAll('.god-range').forEach((r) => (r.oninput = () => {
+      const k = r.dataset.stat; $('#gv_' + k).textContent = r.value;
+      E().godSet(state, { stats: { [k]: +r.value } }); renderStats();
+    }));
+    const acts = {
+      setMoney: () => E().godSet(state, { money: +$('#gMoney').value || 0 }),
+      m1: () => { E().godSet(state, { addMoney: 1e6 }); },
+      m10: () => { E().godSet(state, { addMoney: 1e7 }); },
+      heal: () => E().godSet(state, { healAll: true }),
+      clear: () => E().godSet(state, { clearRecord: true }),
+      revive: () => { E().godSet(state, { revive: true }); renderGame(); }
+    };
+    app().querySelectorAll('[data-g]').forEach((b) => (b.onclick = () => { acts[b.dataset.g](); renderStats(); toast('Reality altered.'); if (b.dataset.g === 'revive') closeSheet(); else godSheet(); }));
+  }
+
+  function timeTravelSheet() {
+    const tl = E().timeline();
+    let html = `<h2>⏪ Go Back in Time</h2><div class="lead">Rewind to a younger age. Everything after that point is undone.</div>`;
+    if (!tl.length) html += `<div class="lead">No past to return to yet — age up at least once first.</div>`;
+    else html += tl.slice().reverse().map((t) => `<div class="list-item"><div class="li-main"><div class="li-title">Age ${t.age}</div><div class="li-sub">${esc(t.name)}${t.gen > 1 ? ' • Gen ' + t.gen : ''}</div></div><button class="btn" data-tt="${t.idx}">Rewind here</button></div>`).join('');
+    openSheet(html);
+    app().querySelectorAll('[data-tt]').forEach((b) => (b.onclick = () => {
+      const restored = E().timeTravel(+b.dataset.tt);
+      if (restored) { state = restored; RTP._state = state; closeSheet(); renderGame(); toast(`You travelled back to age ${restored.char.age}.`); }
+    }));
+  }
+
+  function orientationSheet() {
+    const ch = state.char;
+    openSheet(`
+      <h2>🌈 Sexual Orientation</h2>
+      <div class="lead">Choose who you're attracted to. This sets who appears when you look for love.</div>
+      ${['straight', 'gay', 'bisexual'].map((o) => `<button class="choice" data-o="${o}"><span>${o[0].toUpperCase() + o.slice(1)}</span><span class="meta">${ch.orientation === o ? '✓ current' : ''}</span></button>`).join('')}
+    `);
+    app().querySelectorAll('[data-o]').forEach((b) => (b.onclick = () => { E().godSet(state, { orientation: b.dataset.o }); toast(`Orientation set to ${b.dataset.o}.`); openMenu(); }));
+  }
+
+  function confirmNewLife() {
+    openSheet(`<h2>🍼 New Life?</h2><div class="lead">This ends your current life and dynasty. Are you sure?</div><div class="btn-row"><button class="btn danger" id="nlYes">Yes, start over</button><button class="btn ghost" id="nlNo">Cancel</button></div>`);
+    $('#nlYes').onclick = () => { E().wipe(); closeSheet(); showTitle(); };
+    $('#nlNo').onclick = openMenu;
   }
 
   function renderStats() {
@@ -179,6 +260,7 @@
 
   function actionResult(res) {
     renderStats(); renderLog(false);
+    E().save(state); // persist immediately after every action
     if (res && res.text) toast(res.text);
     if (state.char && !state.char.alive) { closeSheet(); showDeath(); }
   }
@@ -236,15 +318,22 @@
     html += `<div class="section-title">Your People</div>`;
     html += rels.length ? rels.map((r) => `<div class="list-item"><div class="li-main"><div class="li-title">${esc(r.name)} <span class="pill">${esc(E().labelRel(r))}</span></div><div class="li-sub">Age ${r.age} • Relationship ${r.rel}%</div></div><button class="btn ghost" data-rel="${r.id}">Interact</button></div>`).join('') : `<div class="lead">You're all alone in this world.</div>`;
     html += `<div class="btn-row" style="margin-top:12px">`;
+    if (ch.age >= 5) html += `<button class="btn ghost" data-a="meet">Meet Someone</button>`;
     if (ch.age >= 14 && !E().partner(ch)) html += `<button class="btn" data-a="date">Find Love</button>`;
-    if (E().partner(ch)) { html += `<button class="btn" data-a="propose">Propose 💍</button><button class="btn" data-a="child">Have a Child 👶</button>`; }
+    if (E().partner(ch)) {
+      html += `<button class="btn" data-a="propose">Propose 💍</button><button class="btn" data-a="child">Have a Child 👶</button>`;
+      html += `<button class="btn danger" data-a="cheat">Cheat</button><button class="btn danger" data-a="breakup">Break Up</button>`;
+    }
     html += `</div>`;
     openSheet(html);
     app().querySelectorAll('[data-rel]').forEach((b) => (b.onclick = () => interactSheet(b.dataset.rel)));
     const acts = {
+      meet: () => { actionResult(RTP.loveSystem.meetPerson(state)); catLove(); },
       date: () => { const r = RTP.loveSystem.findDate(state); if (r.ok) dateSheet(r.candidate); else actionResult(r); },
       propose: () => { actionResult(RTP.loveSystem.propose(state, E().partner(ch).id)); catLove(); },
-      child: () => { actionResult(RTP.loveSystem.haveChild(state)); catLove(); }
+      child: () => { actionResult(RTP.loveSystem.haveChild(state)); catLove(); },
+      cheat: () => { actionResult(RTP.loveSystem.cheat(state)); catLove(); },
+      breakup: () => { const p = E().partner(ch); if (p) { actionResult(RTP.loveSystem.breakUp(state, p.id)); catLove(); } }
     };
     app().querySelectorAll('[data-a]').forEach((b) => (b.onclick = acts[b.dataset.a]));
   }
@@ -256,6 +345,7 @@
   function interactSheet(relId) {
     const r = state.char.relationships.find((x) => x.id === relId);
     if (!r) return;
+    const isPartner = ['partner', 'spouse', 'fiance'].includes(r.type);
     openSheet(`<h2>${esc(r.name)}</h2><div class="lead">${esc(E().labelRel(r))} • Relationship ${r.rel}%</div>
       <div class="btn-row">
         <button class="btn" data-k="spendTime">Spend Time</button>
@@ -263,8 +353,17 @@
         <button class="btn" data-k="gift">Give Gift</button>
         <button class="btn danger" data-k="argue">Argue</button>
         <button class="btn danger" data-k="insult">Insult</button>
-      </div>`);
+      </div>
+      ${isPartner ? `<div class="section-title">Romance</div><div class="btn-row">
+        ${r.type !== 'spouse' ? '<button class="btn" data-p="propose">Propose 💍</button>' : ''}
+        <button class="btn danger" data-p="breakup">${r.type === 'spouse' ? 'Divorce' : 'Break Up'}</button>
+      </div>` : ''}`);
     app().querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => { actionResult(RTP.loveSystem.interact(state, relId, b.dataset.k)); interactSheet(relId); }));
+    app().querySelectorAll('[data-p]').forEach((b) => (b.onclick = () => {
+      const a = b.dataset.p;
+      const res = a === 'propose' ? RTP.loveSystem.propose(state, relId) : RTP.loveSystem.breakUp(state, relId);
+      actionResult(res); catLove();
+    }));
   }
 
   // ---- Activities (Mind & Body, Doctor, Casino) ----
@@ -359,7 +458,10 @@
     html += `<div class="btn-row"><button class="btn" data-a="startbiz">Start a Business</button></div>`;
     // Politics
     html += `<div class="section-title">Politics</div>`;
-    if (p.politics.inOffice) html += `<div class="list-item"><div class="li-main"><div class="li-title">${esc(p.politics.office)}</div><div class="li-sub">Approval ${p.politics.approval}%</div></div></div>`;
+    if (p.politics.inOffice) {
+      html += `<div class="list-item"><div class="li-main"><div class="li-title">${esc(p.politics.office)}</div><div class="li-sub">Approval ${p.politics.approval}%</div></div></div>`;
+      html += `<div class="btn-row"><button class="btn" data-pa="speech">Give Speech</button><button class="btn" data-pa="bill">Pass Bill</button><button class="btn" data-pa="rally">Hold Rally</button><button class="btn" data-pa="scandal">Address Scandal</button></div>`;
+    }
     html += `<div class="btn-row" id="offices"></div>`;
     // Fame
     html += `<div class="section-title">Fame</div><div class="list-item"><div class="li-main"><div class="li-title">${p.fame.title || 'Unknown'}</div><div class="li-sub">${fmt(p.fame.followers)} followers</div></div><button class="btn" data-a="viral">Post Content</button></div>`;
@@ -376,6 +478,7 @@
     app().querySelectorAll('[data-a]').forEach((b) => (b.onclick = () => { const r = acts[b.dataset.a](); if (r) { actionResult(r); catPower(); } }));
     app().querySelectorAll('[data-grow]').forEach((b) => (b.onclick = () => { actionResult(RTP.powerSystem.growBusiness(state, b.dataset.grow)); catPower(); }));
     app().querySelectorAll('[data-office]').forEach((b) => (b.onclick = () => { actionResult(RTP.powerSystem.runForOffice(state, b.dataset.office)); catPower(); }));
+    app().querySelectorAll('[data-pa]').forEach((b) => (b.onclick = () => { actionResult(RTP.powerSystem.politicalAction(state, b.dataset.pa)); catPower(); }));
   }
   function statecraftUnlocked() { return !!state.char.flags.headOfState; }
 

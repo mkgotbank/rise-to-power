@@ -35,7 +35,7 @@ No build step, no dependencies — it's plain HTML/CSS/JS.
 - 📊 Core stats: Health, Happiness, Smarts, Looks, plus Karma — that drift and respond to your choices
 - 🎓 Education from elementary through university and beyond
 - 💼 A deep career system — dozens of jobs, raises, promotions, performance
-- ❤️ Relationships: dating, marriage, children, friends, family, and pets — each with their own bond
+- ❤️ Relationships: meet people, date, marry, have children, friends, family, pets — each with their own bond. Break up, divorce, or cheat (with consequences). Set your **sexual orientation** (drives who you date).
 - 🏥 Health & medicine: illnesses, conditions, addictions, doctors, therapy
 - 🏠 Assets & money: cars, real estate, luxury goods, investments, and the casino
 - 🎲 Hundreds of randomized life events with branching, weighted outcomes
@@ -48,6 +48,12 @@ No build step, no dependencies — it's plain HTML/CSS/JS.
 - 🌟 **Fame** — go viral, build a following, become an icon
 - 🎖️ **Military** — enlist in the Army, Navy, Air Force, or an intelligence agency; run missions, earn rank and medals
 - 🌍 **Statecraft** — once you lead a nation, command a treasury and army: forge alliances, sign trade deals, sanction rivals, **declare war, and annex other countries into your empire**
+
+**Sandbox & control (the ☰ menu):**
+- ⚡ **God Mode** — drag sliders to set any stat, set/add cash, heal everything, wipe your criminal record, even revive after death
+- ⏪ **Go Back in Time** — rewind to any earlier age; everything after is undone
+- 🌈 Change your orientation any time
+- 💾 **Auto-save after every action** to your browser — close the tab and your life is right where you left it
 
 ## How it works
 
